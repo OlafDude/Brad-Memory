@@ -101,10 +101,14 @@ public class BradMemoryScript : MonoBehaviour {
 
 	void Awake(){
         moduleId = moduleIdCounter++;
-		foreach (KMSelectable button in buttons){
+		for (int i = 0; i < buttons.Length; i++){
+			int j = i; 
+			buttons[i].OnInteract += delegate () {ButtonPress(j); return false;};
+		}
+		/*/foreach (KMSelectable button in buttons){
             KMSelectable pressedButton = button;
             button.OnInteract += delegate () { ButtonPress(pressedButton); return false; };
-        }
+        }/*/
 	}
 
 	void Start () {
@@ -127,15 +131,15 @@ public class BradMemoryScript : MonoBehaviour {
 			FindCorrectOrder();
 	}
 
-	void ButtonPress(KMSelectable button){
+	void ButtonPress(int j){
 		if (waiting == true){
 			return; 
 		}
 		string targetLed = ""; 
 		GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
-		button.AddInteractionPunch(0.7f);
-		val = Convert.ToInt32(button.GetComponentInChildren<TextMesh>().text); 
-		switch (button.GetComponent<MeshRenderer>().material.name){
+		buttons[j].AddInteractionPunch(0.7f);
+		val = Convert.ToInt32(buttons[j].GetComponentInChildren<TextMesh>().text); 
+		switch (buttons[j].GetComponent<MeshRenderer>().material.name){
 			case "1 (Instance)": 
 				pos = 1; 
 				targetLed = "1st";
@@ -158,17 +162,15 @@ public class BradMemoryScript : MonoBehaviour {
 			break; 
 		}
 
-		GameObject pressedLed = GameObject.Find(targetLed); 
-		MeshRenderer pressedLedDisp = pressedLed.GetComponent<MeshRenderer>(); 
-		StartCoroutine(Depress(button));
+		StartCoroutine(Depress(buttons[j]));
 		if(_correctNumbers[pressIndex]==val){
 			currentPos.Add(pos); 
 			allPresses[stage-1][pressIndex] = val; 
-			pressedLedDisp.material = ledMats[3];
+			buttonLeds[j].material = ledMats[3];
 			pressIndex++; 
 		}
 		else{
-			pressedLedDisp.material = ledMats[4];
+			buttonLeds[j].material = ledMats[4];
 			StartCoroutine(Strike()); 
 			Debug.Log("Incorrect Press"); 
 		}
@@ -185,7 +187,6 @@ public class BradMemoryScript : MonoBehaviour {
 			else{
 				StartCoroutine(NewStage());
 			}
-			
 		}
 	}
 
@@ -543,5 +544,4 @@ public class BradMemoryScript : MonoBehaviour {
 		Debug.LogFormat("Brad Memory #{0}: Stage {1} correct pressing order (cardinal): {2}", moduleId, stage, __message);
 		allPresses[stage-1] = _array; 
 	}
-
 }

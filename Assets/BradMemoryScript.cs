@@ -95,7 +95,8 @@ public class BradMemoryScript : MonoBehaviour {
 	private int pos;  
 	List<int> currentPos = new List<int>(){0,0,0,0,0};
 	bool waiting = false; 
-	bool special = false; 
+	bool special = false;
+	bool moduleSolved;
 	int _stage; 
 	
 
@@ -132,10 +133,10 @@ public class BradMemoryScript : MonoBehaviour {
 	}
 
 	void ButtonPress(int j){
-		if (waiting == true){
+		if (waiting || moduleSolved){
 			return; 
 		}
-		string targetLed = ""; 
+		string targetLed; 
 		GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
 		buttons[j].AddInteractionPunch(0.7f);
 		val = Convert.ToInt32(buttons[j].GetComponentInChildren<TextMesh>().text); 
@@ -204,7 +205,8 @@ public class BradMemoryScript : MonoBehaviour {
 		dots.gameObject.SetActive(false); 
 		quest.SetActive(false);
 		Audio.PlaySoundAtTransform("boom",transform);
-		background.material = dispMats[22]; 
+		background.material = dispMats[22];
+		moduleSolved = true;
 		GetComponent<KMBombModule>().HandlePass();
 	}
 	IEnumerator SolveFade(KMSelectable button){
@@ -543,5 +545,115 @@ public class BradMemoryScript : MonoBehaviour {
 		_array = Array.ConvertAll(array, s => int.Parse(s));
 		Debug.LogFormat("Brad Memory #{0}: Stage {1} correct pressing order (cardinal): {2}", moduleId, stage, __message);
 		allPresses[stage-1] = _array; 
+	}
+
+	// Twitch Plays by Kilo Bites
+
+#pragma warning disable 414
+	private readonly string TwitchHelpMessage = @"!{0} position/pos/p 2 3 [presses button positions 2 and 3] || !{0} label/lab/l 4 5 [presses button positions labeled 4 and 5]";
+#pragma warning restore 414
+
+	IEnumerator ProcessTwitchCommand(string command)
+	{
+		string[] split = command.ToUpperInvariant().Split(new[] { " " }, StringSplitOptions.RemoveEmptyEntries);
+
+		if (waiting)
+		{
+			yield return "sendtochaterror You cannot interact with the module at this time!";
+			yield break;
+		}
+
+		switch (split[0])
+		{
+			case "POSITION":
+			case "POS":
+			case "P":
+			case "LABEL":
+			case "LAB":
+			case "L":
+				if (split.Length == 1)
+				{
+					yield return "sendtochaterror Please specify what positions to press!";
+					yield break;
+				}
+				if (split.Skip(1).Count() > 5)
+				{
+					yield return "sendtochaterror Too many parameters!";
+					yield break;
+				}
+				if (split.Skip(1).Any(x => x.Length > 1))
+				{
+					yield return "sendtochaterror Make sure the digits you want to input are only in single digits.";
+					yield break;
+				}
+				if (!split.Skip(1).Select(x => x[0]).All(char.IsDigit))
+				{
+					yield return string.Format("sendtochaterror {0} is/are not valid number(s)!", split.Skip(1).Select(x => x[0]).Where(x => !char.IsDigit(x)).Join(", "));
+					yield break;
+				}
+				if (split.Skip(1).Count() > (_correctNumbers.Count - pressIndex))
+				{
+					yield return "sendtochaterror Too many parameters!";
+					yield break;
+				}
+				if (split.Skip(1).Distinct().Count() != split.Skip(1).Count())
+				{
+					yield return "sendtochaterror There is a duplicate position/label in the order you want to press. Make sure they are unique!";
+					yield break;
+				}
+
+				var isLabelCommand = new[] { "LABEL", "LAB", "L" }.Contains(split[0]);
+
+				var buttonsToPress = split.Skip(1).Select(x => (isLabelCommand ? buttons.IndexOf(y => y.GetComponentInChildren<TextMesh>().text == x) : x[0] - '0' - 1)).ToArray();
+
+				if (currentPos.Where(x => x != 0).Select(x => x - 1).Any(buttonsToPress.Contains))
+				{
+					yield return "sendtochaterror One or more buttons have already button pressed!";
+					yield break;
+				}
+				if (!Enumerable.Range(0, 5).Any(buttonsToPress.Contains))
+				{
+					yield return "sendtochaterror Please make sure the button/label numbers are 1-5 inclusive!";
+					yield break;
+				}
+
+				yield return null;
+
+				foreach (var num in buttonsToPress)
+				{
+					buttons[num].OnInteract();
+					yield return new WaitForSeconds(0.1f);
+				}
+				yield return "solve";
+				yield break;
+			default:
+				yield return "sendtochaterror The command you inputted is invalid!";
+				yield break;
+		}
+	}
+
+	IEnumerator TwitchHandleForcedSolve()
+	{
+		while (waiting)
+		{
+			if (moduleSolved)
+				yield break;
+
+			yield return true;
+		}
+
+		while (!moduleSolved)
+		{
+			var correctButtonPresses = _correctNumbers.Where(x => !currentPos.Where(y => y != 0).Contains(x)).Select(x => buttons.IndexOf(y => int.Parse(y.GetComponentInChildren<TextMesh>().text) == x)).ToArray();
+
+			foreach (var correctNum in correctButtonPresses)
+			{
+				buttons[correctNum].OnInteract();
+				yield return new WaitForSeconds(0.1f);
+			}
+
+			while (waiting)
+				yield return true;
+		}
 	}
 }
